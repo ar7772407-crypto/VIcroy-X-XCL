@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-24  
 **Environment:** User-reported Windows PowerShell session, using the extracted `VIctory-main` and `xcl-main` folders.  
-**Scope:** Build and test checks only. No GTA VI gameplay test, shader-capture analysis, or GPU compatibility claim was made.
+**Scope:** Build/test validation and a read-only shader-package inventory. No GTA VI gameplay test, shader translation-success claim, or GPU compatibility claim was made.
 
 ## VIctory
 
@@ -28,6 +28,43 @@ The exact test counts and the tested source commit are not available in the conv
 - The first E2E run could not find `xcl_testtitle.exe` and `testgame_mw.dll`; after `cargo build --workspace`, the E2E suite passed 3/3.
 - One initial library-test run exited abnormally with Windows status `0xc0000005`. The named test passed when run alone with `--nocapture`, and the full library suite then passed 727/727. The original abnormal exit was not diagnosed, so it should be treated as a transient/unresolved test-run issue rather than a proven code defect or a proven fix.
 - Two non-fatal deprecation warnings remain: `Atomic<u64>::fetch_update` in `crates/xcl/src/hle/d3d12x/real.rs` and `Atomic<u32>::fetch_update` in `crates/xcl/src/hle/xgameruntime/mod.rs`. They do not prevent compilation or the passing test runs.
+
+
+## GTA VI shader-package inventory (user-run)
+
+**Input path (kept local; not uploaded):** `shaders.rpf` from the user's configured game folder.  
+**Command:** `cargo run -p xcl -- shaders "<game-folder>\\shaders.rpf" --top 50 --json`  
+**Reported scan time:** 34.2 seconds.
+
+| Metric | Result |
+|---|---:|
+| RPF9 package size | 392.6 MB |
+| Shader records | 26,503 |
+| FSSM records / programs | 26,698 |
+| Xbox-native shader records | 26,503 |
+| RDNA2 instructions decoded | 44,422,713 |
+| Distinct mnemonics | 452 |
+| Undecoded dwords | 0 |
+| Inflate errors | 0 |
+| Parse problems | 0 |
+| Unusual records | 0 |
+| Embedded data blocks | 1,473 |
+
+DXIL-stage counts: PS 12,101; MS 9,282; CS 2,689; VS 2,236; GS 195. Hardware-stage counts also included 195 ES entries paired with GS+VS.
+
+**Important interpretation:** this was a format/ISA inventory scan, not a recompiler run. The JSON explicitly reported `"recomp": null`, because the `--recomp` option was not supplied. Therefore this output does not establish how many of the 26,503 shaders XCL can translate, nor whether VIctory can translate them. The mnemonic order/coverage values are corpus frequency statistics, not translation-success rates.
+
+VIctory's `shader-info` command skipped `anim.rpf` (4.1 GB) and `audio.rpf` (26.58 GB) because its current scanner has a 2 GiB per-file limit. The separately inventoried `shaders.rpf` is 0.38 GB and was scanned successfully by XCL.
+
+### Next bounded experiment
+
+Use XCL's direct-DXIL translator on its default seeded sample (200 programs) with validation, rather than running the full HLSL recompiler over every record immediately:
+
+```powershell
+cargo run -p xcl -- shaders "C:\\path\\to\\game\\shaders.rpf" --direct --sample 200 --validate --json --threads 4
+```
+
+This tests a sample only and is separate from the `--recomp` HLSL recompiler path. Preserve the JSON output. It is a diagnostic, not a game execution test.
 
 ## What these results establish
 
